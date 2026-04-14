@@ -163,14 +163,11 @@ router.post('/autofix', async (req, res) => {
             });
         }
 
-        let enqueueReserved = false;
-        let job = null;
+        let job;
 
         try {
             await resourceGovernanceService.reserveEnqueue(tId, governanceContext.queueName);
-            enqueueReserved = true;
-
-            const job = await queue.enqueueJob('AUTOFIX', {
+            job = await queue.enqueueJob('AUTOFIX', {
                 asset_id,
                 tenant_id: tId,
                 policy: policy || 'OFFSET_CMYK_STRICT',
@@ -180,9 +177,7 @@ router.post('/autofix', async (req, res) => {
                 }
             });
         } catch (err) {
-            if (enqueueReserved) {
-                await resourceGovernanceService.rollbackEnqueue(tId, governanceContext.queueName).catch(() => {});
-            }
+            await resourceGovernanceService.rollbackEnqueue(tId, governanceContext.queueName).catch(() => {});
             throw err;
         }
 
