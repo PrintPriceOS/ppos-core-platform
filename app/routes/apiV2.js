@@ -164,6 +164,104 @@ router.get('/', v2ReadLimiter, async (req, res) => {
 });
 
 /**
+ * POST /api/v2/jobs/:id/actions/fix
+ * Trigger an AUTOFIX job from an existing PREFLIGHT job.
+ * Derives the asset_id from the parent job — no re-upload needed.
+ */
+router.post('/:id/actions/fix', v2ReadLimiter, async (req, res) => {
+    try {
+        const jobId = req.params.id;
+        const tenantId = req.auth.tenantId;
+        const policy = req.body.policy;
+
+        // 1. Verify parent job ownership and get asset_id
+        const { rows } = await db.query(
+            'SELECT id, asset_id, status, type FROM jobs WHERE id = ? AND tenant_id = ?',
+            [jobId, tenantId]
+        );
+        const parentJob = rows[0];
+        if (!parentJob) {
+            return res.status(404).json({ error: 'Job not found for this tenant.' });
+        }
+        if (!parentJob.asset_id) {
+            return res.status(422).json({ error: 'Parent job has no associated asset.' });
+        }
+
+        // 2. Governance gates (mirrors preflightV2 autofix logic)
+        const { policyEnforcementService, resourceGovernanceService } = require('@ppos/shared-infra');
+        const governanceContext = {
+            tenantId,
+            queueName: 'PREFLIGHT_PRIMARY',
+            serviceName: 'preflight-api-v2',
+            jobType: 'AUTOFIX',
+            operation: 'enqueue'
+        };
+
+        const decision = await policyEnforcementService.evaluate(governanceContext);
+        if (!decision.allowed) {
+            return res.status(403).json({
+                error: 'Operation blocked by Platform Governance',
+                reason: decision.reason,
+                code: 'GOVERNANCE_BLOCK'
+            });
+        }
+
+        const resourceDecision = await resourceGovernanceService.evaluateRequest(governanceContext);
+        if (!resourceDecision.allowed) {
+            return res.status(429).json({
+                error: 'Resource quota exceeded',
+                code: 'RESOURCE_LIMIT_REACHED',
+                decision: resourceDecision.decision,
+                reason: resourceDecision.reason,
+                usage: resourceDecision.currentUsage,
+                limits: resourceDecision.effectiveLimits
+            });
+        }
+
+        // 3. Enqueue AUTOFIX
+        let job;
+        try {
+            await resourceGovernanceService.reserveEnqueue(tenantId, governanceContext.queueName);
+            job = await queue.enqueueJob('AUTOFIX', {
+                asset_id: parentJob.asset_id,
+                tenant_id: tenantId,
+                policy: policy || 'OFFSET_CMYK_STRICT',
+                governance: { ...governanceContext, enqueuedAt: new Date().toISOString() }
+            });
+        } catch (err) {
+            await resourceGovernanceService.rollbackEnqueue(tenantId, governanceContext.queueName).catch(() => {});
+            throw err;
+        }
+
+        // 4. Persist new AUTOFIX job
+        await db.query(
+            'INSERT INTO jobs (id, tenant_id, asset_id, type, status) VALUES (?, ?, ?, ?, ?)',
+            [job.id, tenantId, parentJob.asset_id, 'AUTOFIX', 'QUEUED']
+        );
+
+        // 5. Audit
+        await auditService.logAction(tenantId, 'AUTOFIX_JOB_SUBMITTED', {
+            ipAddress: req.ip,
+            details: { job_id: job.id, parent_job_id: jobId, asset_id: parentJob.asset_id, policy }
+        });
+
+        res.status(202).json({
+            job_id: job.id,
+            status: 'QUEUED',
+            parent_job_id: jobId,
+            created_at: new Date().toISOString(),
+            links: {
+                self: `/api/v2/jobs/${job.id}`,
+                parent: `/api/v2/jobs/${jobId}`
+            }
+        });
+    } catch (err) {
+        console.error('[API-V2-ACTIONS-FIX]', err);
+        res.status(500).json({ error: 'Internal server error while triggering autofix.' });
+    }
+});
+
+/**
  * POST /api/v2/jobs/:id/routing
  * Get routing recommendations for a specific job.
  */
