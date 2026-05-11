@@ -196,12 +196,68 @@ const ISSUE_HINTS_BY_ID: Record<string, IssueHint> = {
   },
 
   // 20) PDF muy grande
-  'very-large-file': {
-    shortTitle: 'Very large PDF file',
+  ‘very-large-file’: {
+    shortTitle: ‘Very large PDF file’,
     userFriendlySummary:
-      'The file is unusually large. This can slow down uploads, processing, and imposition, and may indicate unoptimized images.',
+      ‘The file is unusually large. This can slow down uploads, processing, and imposition, and may indicate unoptimized images.’,
     aiPrompt:
-      'Guide the user to optimize the PDF: compress or downsample images appropriately, remove unused objects and layers, and avoid embedding unnecessary assets. Mention Acrobat’s “Save as Optimized PDF”, InDesign export settings, and balancing file size vs quality for print.',
+      ‘Guide the user to optimize the PDF: compress or downsample images appropriately, remove unused objects and layers, and avoid embedding unnecessary assets. Mention Acrobat\’s “Save as Optimized PDF”, InDesign export settings, and balancing file size vs quality for print.’,
+  },
+
+  // Engine canonical IDs (ppos-preflight-engine)
+  ‘BLEED_MISSING’: {
+    shortTitle: ‘Bleed Zone Missing’,
+    userFriendlySummary:
+      ‘The PDF does not define a BleedBox. Without bleed, trimming can leave a white edge on any side.’,
+    suggestedFix: ‘Use the “Fix Bleed” option to automatically add a 3mm bleed zone, or re-export your file with “Use Document Bleed Settings” enabled (minimum 3mm).’,
+    aiPrompt:
+      ‘Explain bleed in very practical terms (extra image beyond trim to avoid white edges after cutting) and why 3mm is the standard minimum. Show how to set bleed correctly in InDesign export and verify TrimBox/BleedBox in Acrobat.’,
+  },
+  ‘BLEED_INSUFFICIENT’: {
+    shortTitle: ‘Insufficient Bleed (< 3mm)’,
+    userFriendlySummary:
+      ‘The bleed margin is smaller than 3mm on one or more sides, increasing the risk of white edges after trimming.’,
+    suggestedFix: ‘Use the “Fix Bleed” option to expand the bleed zone to 3mm, or extend artwork beyond the trim line in your layout software and re-export.’,
+    aiPrompt:
+      ‘Explain why 3mm bleed is the norm, especially for full-bleed covers and interiors. Provide concrete steps to extend artwork in InDesign or Illustrator and re-export with correct bleed settings.’,
+  },
+  ‘TRIMBOX_MISSING’: {
+    shortTitle: ‘TrimBox Not Defined’,
+    userFriendlySummary:
+      ‘No TrimBox is defined in the PDF. The print house cannot determine the exact trim line, which may cause miscuts.’,
+    suggestedFix: ‘Apply the automatic TrimBox fix, or re-export from your layout software with “Marks and Bleeds > Trim Marks” enabled.’,
+    aiPrompt:
+      ‘Explain what TrimBox is (the intended final size after cutting) and why it must be explicitly set for professional print production. Show how to add it via InDesign export or Acrobat Set Page Boxes.’,
+  },
+  ‘TRIMBOX_INVALID’: {
+    shortTitle: ‘Invalid TrimBox Dimensions’,
+    userFriendlySummary:
+      ‘The TrimBox has zero or negative dimensions, which makes it unusable for print production.’,
+    suggestedFix: ‘Apply the automatic TrimBox fix to rebuild it from the MediaBox, or correct the page dimensions in your layout software.’,
+    aiPrompt:
+      ‘Explain that an invalid TrimBox (zero area or negative coordinates) is likely caused by a broken export or script. Recommend rebuilding the TrimBox from the MediaBox via Acrobat Set Page Boxes or re-exporting from the source file.’,
+  },
+  ‘TRIMBOX_OUTSIDE_MEDIABOX’: {
+    shortTitle: ‘TrimBox Extends Outside MediaBox’,
+    userFriendlySummary:
+      ‘The trim area extends beyond the physical page boundary, which will cause cropping or alignment errors in imposition.’,
+    suggestedFix: ‘Apply the automatic TrimBox fix, or correct bleed and page size settings in your layout software before re-exporting.’,
+    aiPrompt:
+      ‘Explain the relationship between MediaBox (physical sheet) and TrimBox (final trim size) and why TrimBox must always be inside MediaBox. Guide the user to fix page dimensions in InDesign or Acrobat.’,
+  },
+  ‘INTENT_BOOK’: {
+    shortTitle: ‘Book / Catalog Intent Detected’,
+    userFriendlySummary:
+      ‘The page count indicates this is a book or catalog. Spine width, imposition, and binding settings should be verified.’,
+    aiPrompt:
+      ‘Confirm the document type (book/catalog) and advise the user to verify spine width calculation, imposition scheme (saddle stitch vs perfect bind), and whether a cover PDF is submitted separately. Mention checking page count parity (even pages for print).’,
+  },
+  ‘HEURISTIC_TEXT_OUTLINED’: {
+    shortTitle: ‘Text Possibly Converted to Outlines’,
+    userFriendlySummary:
+      ‘No embedded fonts were detected. Text may have been converted to vector paths, which prevents reflow and text search.’,
+    aiPrompt:
+      ‘Explain the difference between live text and outlined text in PDFs. Outlined text cannot be reflowed, searched, or edited, but is safe for print if done intentionally. Advise the user to confirm whether text outlining was intentional and, if not, re-export from the source file with fonts embedded.’,
   },
 };
 

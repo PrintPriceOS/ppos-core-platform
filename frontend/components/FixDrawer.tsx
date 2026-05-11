@@ -288,7 +288,7 @@ export const FixDrawer: React.FC<Props> = ({
     (issue as any).message?.toLowerCase().includes('resolution') ||
     (issue as any).message?.toLowerCase().includes('dpi');
 
-  const isBleedIssue = ['missing-bleed-info', 'insufficient-bleed'].includes(issue.id);
+  const isBleedIssue = ['missing-bleed-info', 'insufficient-bleed', 'BLEED_MISSING', 'BLEED_INSUFFICIENT'].includes(issue.id);
 
   const handleExplainClick = async () => {
     if (!issue) return;
